@@ -1,0 +1,45 @@
+.pio
+# ---- PlatformIO ----
+.pio/
+.pioenvs/
+.piolibdeps/
+.piodeps/
+.pio/build/
+.pio/libdeps/
+.pio/test/
+
+# ---- CLion / JetBrains ----
+.idea/
+cmake-build-*/
+cmake-build-debug/
+cmake-build-release/
+cmake-build-*/
+
+# ---- CMake ----
+CMakeFiles/
+CMakeCache.txt
+Makefile
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+
+# ---- Build artifacts ----
+*.o
+*.obj
+*.d
+*.elf
+*.bin
+*.hex
+*.map
+*.a
+
+# ---- Logs ----
+*.log
+
+# ---- OS files ----
+.DS_Store
+Thumbs.db
+
+# ---- Backup ----
+*~
+*.swp
