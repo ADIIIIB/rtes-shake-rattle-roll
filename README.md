@@ -25,8 +25,6 @@ Results are transmitted wirelessly via **Bluetooth Low Energy (BLE)**.
 
 ---
 
----
-
 ## Requirements
 - ST B-L475E-IOT01A Discovery Kit
 - PlatformIO (Mbed framework)
