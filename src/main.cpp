@@ -1,3 +1,4 @@
+#include "math.h"
 #include "parkinsons_system.h"
 #include "gait.h"
 
@@ -17,63 +18,10 @@ DigitalOut led3(LED3);  // LD3 - Yellow - Freezing
 InterruptIn button(BUTTON1);
 
 // === Global Variables ===
-SensorData sensor_data = {{0}, {0}, {0}, 0};
+SensorData sensor_data = {{0}, {0}, {0}, {0}, 0};
 DetectionResults results = {false, 0, false, 0, false, 0};
 bool sensor_initialized = false;
 bool button_pressed = false;
-
-// ===================================================
-// Helper Math Functions
-// ===================================================
-float sqrt_custom(float x) {
-    if (x < 0) return 0;
-    if (x == 0) return 0;
-    float root = x;
-    for (int i = 0; i < 10; i++) {
-        root = 0.5f * (root + x / root);
-    }
-    return root;
-}
-
-float cos_custom(float angle) {
-    const float PI = 3.14159265359f;
-    const float TWO_PI = 2.0f * PI;
-
-    while (angle > PI) angle -= TWO_PI;
-    while (angle < -PI) angle += TWO_PI;
-
-    float x2 = angle * angle;
-    float x4 = x2 * x2;
-    float x6 = x4 * x2;
-    float x8 = x4 * x4;
-
-    return 1.0f - x2/2.0f + x4/24.0f - x6/720.0f + x8/40320.0f;
-}
-
-float sin_custom(float angle) {
-    const float PI = 3.14159265359f;
-    const float TWO_PI = 2.0f * PI;
-
-    while (angle > PI) angle -= TWO_PI;
-    while (angle < -PI) angle += TWO_PI;
-
-    float x3 = angle * angle * angle;
-    float x5 = x3 * angle * angle;
-    float x7 = x5 * angle * angle;
-    float x9 = x7 * angle * angle;
-
-    return angle - x3/6.0f + x5/120.0f - x7/5040.0f + x9/362880.0f;
-}
-
-int log2_custom(int n) {
-    int log = 0;
-    int pow = 1;
-    while (pow < n) {
-        pow *= 2;
-        log++;
-    }
-    return log;
-}
 
 // ===================================================
 // I2C Communication
@@ -142,6 +90,7 @@ void collect_data_sample(float acc_x, float acc_y, float acc_z) {
     sensor_data.accel_x[idx] = acc_x;
     sensor_data.accel_y[idx] = acc_y;
     sensor_data.accel_z[idx] = acc_z;
+    sensor_data.accel_total[idx] = sqrtf(acc_x * acc_x + acc_y * acc_y + acc_z * acc_z);
     sensor_data.index = (idx + 1) % BUFFER_SIZE;
 }
 
@@ -173,11 +122,11 @@ void fft_complex(float *real, float *imag, int n) {
     }
 
     const float PI = 3.14159265359f;
-    for (int s = 1; s <= (int)log2_custom(n); s++) {
+    for (int s = 1; s <= (int)log2f(n); s++) {
         int m = 1 << s;
         float angle = -2.0f * PI / m;
-        float wm_real = cos_custom(angle);
-        float wm_imag = sin_custom(angle);
+        float wm_real = cosf(angle);
+        float wm_imag = sinf(angle);
 
         for (int k = 0; k < n; k += m) {
             float w_real = 1.0f;
@@ -219,7 +168,7 @@ float analyze_frequency_band(float *data, float freq_low, float freq_high) {
     const float PI = 3.14159265359f;
     for (int i = 0; i < BUFFER_SIZE; i++) {
         if (i < GAIT_FFT_SIZE) {
-            float window = 0.5f * (1.0f - cos_custom(2.0f * PI * i / (BUFFER_SIZE - 1)));
+            float window = 0.5f * (1.0f - cosf(2.0f * PI * i / (BUFFER_SIZE - 1)));
             fft_real[i] = data[i] * window;
         }
     }
@@ -233,7 +182,7 @@ float analyze_frequency_band(float *data, float freq_low, float freq_high) {
     int bin_high = (int)(freq_high * GAIT_FFT_SIZE / SAMPLE_RATE);
 
     for (int i = 0; i < GAIT_FFT_SIZE / 2; i++) {
-        float magnitude = sqrt_custom(fft_real[i] * fft_real[i] + fft_imag[i] * fft_imag[i]);
+        float magnitude = sqrtf(fft_real[i] * fft_real[i] + fft_imag[i] * fft_imag[i]);
         float energy = magnitude * magnitude;
         total_energy += energy;
 
@@ -252,13 +201,15 @@ float analyze_frequency_band(float *data, float freq_low, float freq_high) {
 void detect_symptoms() {
     if (!buffer_is_full()) return;
 
+    //TODO: change from only considering accel_z to 3 dimensional vector sum
+
     results.tremor_intensity = analyze_frequency_band(
-        sensor_data.accel_z, TREMOR_LOW_HZ, TREMOR_HIGH_HZ
+        sensor_data.accel_total, TREMOR_LOW_HZ, TREMOR_HIGH_HZ
     );
     results.tremor_detected = (results.tremor_intensity > 20.0f);
 
     results.dyskinesia_intensity = analyze_frequency_band(
-        sensor_data.accel_z, DYSKINESIA_LOW_HZ, DYSKINESIA_HIGH_HZ
+        sensor_data.accel_total, DYSKINESIA_LOW_HZ, DYSKINESIA_HIGH_HZ
     );
     results.dyskinesia_detected = (results.dyskinesia_intensity > 20.0f);
 

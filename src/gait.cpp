@@ -17,7 +17,7 @@ GaitStatus gait_update(const SignalWindow &window) {
     float magnitude[BUFFER_SIZE];
 
     for (int i = 0; i < BUFFER_SIZE; i++) {
-        magnitude[i] = sqrt_custom(
+        magnitude[i] = sqrtf(
             sensor_data.accel_x[i] * sensor_data.accel_x[i] +
             sensor_data.accel_y[i] * sensor_data.accel_y[i] +
             sensor_data.accel_z[i] * sensor_data.accel_z[i]
@@ -34,7 +34,7 @@ GaitStatus gait_update(const SignalWindow &window) {
         variance += diff * diff;
     }
     variance /= BUFFER_SIZE;
-    float std_dev = sqrt_custom(variance);
+    float std_dev = sqrtf(variance);
 
     // FOG Detection Logic based on variance and mean magnitude
     // Low variance + low acceleration = freezing of gait

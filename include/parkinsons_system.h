@@ -36,6 +36,8 @@ struct SensorData {
     float accel_x[BUFFER_SIZE];
     float accel_y[BUFFER_SIZE];
     float accel_z[BUFFER_SIZE];
+    
+    float accel_total[BUFFER_SIZE];
     uint16_t index;
 };
 
