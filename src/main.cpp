@@ -220,9 +220,17 @@ void detect_symptoms() {
     results.freezing_confidence = (gait_status.fog_state > 0) ? 100.0f : 0.0f;
 
     // Prepare movement analysis for BLE update
+    // Clamp values to 0-100 range to prevent overflow
+    uint8_t tremor_level_clamped = (results.tremor_intensity > 100.0f) ? 100 :
+                                   (results.tremor_intensity < 0.0f) ? 0 :
+                                   (uint8_t)results.tremor_intensity;
+    uint8_t dyskinesia_level_clamped = (results.dyskinesia_intensity > 100.0f) ? 100 :
+                                       (results.dyskinesia_intensity < 0.0f) ? 0 :
+                                       (uint8_t)results.dyskinesia_intensity;
+    
     MovementAnalysis movement = {
-        (uint8_t)results.tremor_intensity,
-        (uint8_t)results.dyskinesia_intensity
+        tremor_level_clamped,
+        dyskinesia_level_clamped
     };
 
     // Update BLE characteristics with latest detection results

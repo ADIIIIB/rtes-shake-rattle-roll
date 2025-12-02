@@ -15,16 +15,42 @@ const uint16_t TREMOR_CHAR_UUID = 0xA001;
 const uint16_t DYSKINESIA_CHAR_UUID = 0xA002;
 const uint16_t FREEZING_CHAR_UUID = 0xA003;
 
-// BLE objects
+// BLE objects (static allocation to avoid leaks)
 static BLE *ble_instance = nullptr;
-static GattCharacteristic *tremor_char = nullptr;
-static GattCharacteristic *dyskinesia_char = nullptr;
-static GattCharacteristic *freezing_char = nullptr;
+static uint8_t tremor_char_buffer[1];
+static uint8_t dyskinesia_char_buffer[1];
+static uint8_t freezing_char_buffer[1];
 
-// Characteristic values (1 byte each, 0-100 range)
-static uint8_t tremor_value = 0;
-static uint8_t dyskinesia_value = 0;
-static uint8_t freezing_value = 0;
+static GattCharacteristic tremor_char_static(
+    TREMOR_CHAR_UUID,
+    tremor_char_buffer,
+    sizeof(tremor_char_buffer),
+    sizeof(tremor_char_buffer),
+    GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_READ |
+    GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_NOTIFY
+);
+
+static GattCharacteristic dyskinesia_char_static(
+    DYSKINESIA_CHAR_UUID,
+    dyskinesia_char_buffer,
+    sizeof(dyskinesia_char_buffer),
+    sizeof(dyskinesia_char_buffer),
+    GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_READ |
+    GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_NOTIFY
+);
+
+static GattCharacteristic freezing_char_static(
+    FREEZING_CHAR_UUID,
+    freezing_char_buffer,
+    sizeof(freezing_char_buffer),
+    sizeof(freezing_char_buffer),
+    GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_READ |
+    GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_NOTIFY
+);
+
+static GattCharacteristic *tremor_char = &tremor_char_static;
+static GattCharacteristic *dyskinesia_char = &dyskinesia_char_static;
+static GattCharacteristic *freezing_char = &freezing_char_static;
 
 // BLE event callbacks
 static void on_ble_init_complete(BLE::InitializationCompleteCallbackContext *context) {
@@ -91,35 +117,7 @@ bool ble_service_init() {
     // Get BLE instance
     ble_instance = &BLE::Instance();
 
-    // Define characteristics with read and notify properties
-    tremor_char = new GattCharacteristic(
-        TREMOR_CHAR_UUID,
-        &tremor_value,
-        sizeof(tremor_value),
-        sizeof(tremor_value),
-        GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_READ |
-        GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_NOTIFY
-    );
-
-    dyskinesia_char = new GattCharacteristic(
-        DYSKINESIA_CHAR_UUID,
-        &dyskinesia_value,
-        sizeof(dyskinesia_value),
-        sizeof(dyskinesia_value),
-        GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_READ |
-        GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_NOTIFY
-    );
-
-    freezing_char = new GattCharacteristic(
-        FREEZING_CHAR_UUID,
-        &freezing_value,
-        sizeof(freezing_value),
-        sizeof(freezing_value),
-        GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_READ |
-        GattCharacteristic::BLE_GATT_CHAR_PROPERTIES_NOTIFY
-    );
-
-    // Create service with characteristics
+    // Create service with characteristics (using static allocation)
     GattCharacteristic *chars[] = {tremor_char, dyskinesia_char, freezing_char};
     GattService parkinsons_service(PARKINSONS_SERVICE_UUID, chars, 3);
 
@@ -144,28 +142,37 @@ void ble_service_update(const MovementAnalysis &m, const GaitStatus &g) {
     }
 
     // Update tremor characteristic (0-100)
-    tremor_value = m.tremor_level;
-    ble_instance->gattServer().write(
+    tremor_char_buffer[0] = m.tremor_level;
+    ble_error_t error = ble_instance->gattServer().write(
         tremor_char->getValueHandle(),
-        &tremor_value,
-        sizeof(tremor_value)
+        tremor_char_buffer,
+        sizeof(tremor_char_buffer)
     );
+    if (error != BLE_ERROR_NONE) {
+        printf("Failed to update tremor characteristic: %d\r\n", error);
+    }
 
     // Update dyskinesia characteristic (0-100)
-    dyskinesia_value = m.dyskinesia_level;
-    ble_instance->gattServer().write(
+    dyskinesia_char_buffer[0] = m.dyskinesia_level;
+    error = ble_instance->gattServer().write(
         dyskinesia_char->getValueHandle(),
-        &dyskinesia_value,
-        sizeof(dyskinesia_value)
+        dyskinesia_char_buffer,
+        sizeof(dyskinesia_char_buffer)
     );
+    if (error != BLE_ERROR_NONE) {
+        printf("Failed to update dyskinesia characteristic: %d\r\n", error);
+    }
 
     // Update freezing characteristic (0-100)
     // fog_state: 0 = none, 1 = freeze start, 2 = sustained freeze
     // Convert to 0-100 scale: 0 = 0, 1 = 50, 2 = 100
-    freezing_value = (g.fog_state == 0) ? 0 : ((g.fog_state == 1) ? 50 : 100);
-    ble_instance->gattServer().write(
+    freezing_char_buffer[0] = (g.fog_state == 0) ? 0 : ((g.fog_state == 1) ? 50 : 100);
+    error = ble_instance->gattServer().write(
         freezing_char->getValueHandle(),
-        &freezing_value,
-        sizeof(freezing_value)
+        freezing_char_buffer,
+        sizeof(freezing_char_buffer)
     );
+    if (error != BLE_ERROR_NONE) {
+        printf("Failed to update freezing characteristic: %d\r\n", error);
+    }
 }
