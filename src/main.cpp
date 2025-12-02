@@ -1,6 +1,7 @@
 #include "math.h"
 #include "parkinsons_system.h"
 #include "gait.h"
+#include "ble_service.h"
 
 // ===================================================
 // Hardware Initialization
@@ -218,6 +219,15 @@ void detect_symptoms() {
     results.freezing_detected = (gait_status.fog_state > 0);  // 1 = freeze start, 2 = sustained
     results.freezing_confidence = (gait_status.fog_state > 0) ? 100.0f : 0.0f;
 
+    // Prepare movement analysis for BLE update
+    MovementAnalysis movement = {
+        (uint8_t)results.tremor_intensity,
+        (uint8_t)results.dyskinesia_intensity
+    };
+
+    // Update BLE characteristics with latest detection results
+    ble_service_update(movement, gait_status);
+
     // Compact status format: [Tremor|Dyskinesia|Freezing]
     printf("[%s|%s|%s]\r\n",
            results.tremor_detected ? "T" : " ",
@@ -264,6 +274,9 @@ int main() {
     }
 
     gait_init();
+
+    // Initialize BLE service
+    ble_service_init();
 
     printf("\r\nStarting data acquisition...\r\n");
     printf("Sample Rate: %.0f Hz | Buffer: %d samples (3 sec)\r\n", SAMPLE_RATE, BUFFER_SIZE);
