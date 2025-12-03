@@ -1,9 +1,11 @@
 #pragma once
-#include "sensors.h"
+#include <cstdint>
+#include "config.h"
 
-// 0 = none, 1 = freeze start, 2 = sustained freeze
 struct GaitStatus {
-    uint8_t fog_state;
+    uint8_t fog_state;      // 0 = none, 1 = possible FOG
+    uint8_t step_rate_spm;  // steps per minute (approx, 0–255)
+    uint8_t variability;    // 0–100: gait variability proxy
 };
 
 void gait_init();

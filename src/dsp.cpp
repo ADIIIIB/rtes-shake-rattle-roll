@@ -1,10 +1,10 @@
 #include "dsp.h"
-#include "arm_math.h"          // CMSIS-DSP
+#include <cmath>
 
+// No special init needed for the simple DFT
+void dsp_init() {}
 
-static arm_rfft_fast_instance_f32 rfft_instance;
-
-// Utility: map [value, max_value] to 0–100 (clamped)
+// Map [value, max_value] to 0–100 (clamped)
 static uint8_t scale_to_100(float value, float max_value) {
     if (max_value <= 0.0f) return 0;
     float r = value / max_value;
@@ -13,68 +13,75 @@ static uint8_t scale_to_100(float value, float max_value) {
     return static_cast<uint8_t>(r * 100.0f + 0.5f);
 }
 
-void dsp_init() {
-    arm_rfft_fast_init_f32(&rfft_instance, FFT_SIZE);
-}
+// Compute power in [f_low, f_high] using a naive DFT
+static float band_power_dft(const SignalWindow &window,
+                            float fs,
+                            float f_low,
+                            float f_high)
+{
+    const size_t N = window.length;
+    if (N == 0) return 0.0f;
 
-// Compute sum of magnitude spectrum in [f_low, f_high]
-static float band_power(const float *mag, float fs, float f_low, float f_high) {
-    const float df = fs / FFT_SIZE; // frequency resolution
-    int k_low  = static_cast<int>(ceilf(f_low  / df));
-    int k_high = static_cast<int>(floorf(f_high / df));
+    const float TWO_PI = 6.28318530717958647692f;
+    const float df = fs / N;
+
+    int k_low  = static_cast<int>(std::ceil(f_low  / df));
+    int k_high = static_cast<int>(std::floor(f_high / df));
+
     if (k_low < 1) k_low = 1;
-    if (k_high > static_cast<int>(FFT_SIZE/2)) k_high = FFT_SIZE/2;
-
-    float sum = 0.0f;
-    for (int k = k_low; k < k_high; ++k) {
-        sum += mag[k];
+    if (k_high > static_cast<int>(N/2)) {
+        k_high = static_cast<int>(N/2);
     }
-    return sum;
+    if (k_high < k_low) return 0.0f;
+
+    float sum_power = 0.0f;
+
+    // For each frequency bin k, compute DFT coefficient X[k]
+    for (int k = k_low; k <= k_high; ++k) {
+        float re = 0.0f;
+        float im = 0.0f;
+
+        for (size_t n = 0; n < N; ++n) {
+            float angle = TWO_PI * k * n / N;
+            float x = window.data[n];
+            re += x * std::cos(angle);
+            im -= x * std::sin(angle);
+        }
+
+        float mag2 = re * re + im * im;  // magnitude squared
+        sum_power += mag2;
+    }
+
+    // Normalize a bit so numbers are not gigantic
+    return sum_power / (N * N);
 }
 
 MovementAnalysis dsp_analyze_window(const SignalWindow &window) {
     MovementAnalysis result{0, 0};
 
-    // 1. Prepare FFT input with zero-padding
-    static float fft_in[FFT_SIZE];
-    static float fft_out[FFT_SIZE]; // complex output interleaved
-
-    for (size_t i = 0; i < FFT_SIZE; ++i) {
-        if (i < window.length) {
-            // Optionally apply a window (Hann, etc.) here
-            fft_in[i] = window.data[i];
-        } else {
-            fft_in[i] = 0.0f;
-        }
+    const size_t N = window.length;
+    if (N == 0) {
+        return result;
     }
 
-    // 2. Run real FFT
-    arm_rfft_fast_f32(&rfft_instance, fft_in, fft_out, 0);
-
-    // 3. Convert to magnitude spectrum (bins 0..FFT_SIZE/2)
-    static float mag[FFT_SIZE/2 + 1];
-    mag[0] = fabsf(fft_out[0]); // DC component
-    for (size_t k = 1; k <= FFT_SIZE/2; ++k) {
-        float re = fft_out[2*k];
-        float im = fft_out[2*k + 1];
-        mag[k] = sqrtf(re * re + im * im);
-    }
-
-    // 4. Compute band powers
-    float total_power = band_power(mag, FS_HZ, 0.5f, 15.0f);
+    // Total power in 0.5–15 Hz
+    float total_power = band_power_dft(window, FS_HZ, 0.5f, 15.0f);
     if (total_power < MIN_TOTAL_POWER) {
         // almost no motion
         return result;
     }
 
-    float tremor_power = band_power(mag, FS_HZ, TREMOR_F_LOW, TREMOR_F_HIGH);
-    float dysk_power   = band_power(mag, FS_HZ, DYSK_F_LOW,   DYSK_F_HIGH);
+    float tremor_power = band_power_dft(window, FS_HZ, TREMOR_F_LOW, TREMOR_F_HIGH);
+    float dysk_power   = band_power_dft(window, FS_HZ, DYSK_F_LOW,   DYSK_F_HIGH);
 
     float tremor_rel = tremor_power / total_power;
     float dysk_rel   = dysk_power   / total_power;
 
     if (tremor_rel > MIN_RELATIVE_ENERGY) {
-        result.tremor_level = scale_to_100(tremor_power, total_power);
+        // Compress the 0–1 range so a pure tone doesn't always become 100
+        float rel = tremor_power / total_power;   // 0..1
+        float compressed = std::sqrt(rel);        // still 0..1, but softer
+        result.tremor_level = static_cast<uint8_t>(compressed * 80.0f + 0.5f);
     }
     if (dysk_rel > MIN_RELATIVE_ENERGY) {
         result.dyskinesia_level = scale_to_100(dysk_power, total_power);
