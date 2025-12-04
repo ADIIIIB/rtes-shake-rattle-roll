@@ -3,7 +3,7 @@
 #include "sensors.h"
 #include "dsp.h"
 #include "gait.h"
-// #include "ble_service.h"
+#include "ble_service.h"
 
 DigitalOut led(LED1);   // status LED
 const char *tremor_label(uint8_t level) {
@@ -28,7 +28,7 @@ int main() {
     ok &= sensors_init();
     dsp_init();
     gait_init();
-    // ok &= ble_service_init();
+    ble_service_init();   // ✅ start BLE
 
     if (!ok) {
         // Fatal error: blink fast
@@ -53,6 +53,9 @@ int main() {
                    g.step_rate_spm,
                    g.fog_state,
                    g.variability);
+
+            // ✅ Send to phone via BLE (Option A)
+            ble_service_update(m, g);
 
             bool issue = (m.tremor_level > 0) ||
                          (m.dyskinesia_level > 0) ||
