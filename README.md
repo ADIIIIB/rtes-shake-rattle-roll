@@ -1,37 +1,76 @@
-# GaitWave — RTES Parkinson’s Detection Project
 
-GaitWave is an embedded real-time system built on the **ST B-L475E-IOT01A (STM32L475)** board.  
-The device detects three Parkinson’s-related motion conditions using onboard sensors:
 
-- **Tremor detection** (3–5 Hz)
-- **Dyskinesia detection** (5–7 Hz)
-- **Freezing of Gait (FOG)** using step detection and cadence analysis
 
-All processing is done on-device using IMU sampling, a 3-second sliding window, FFT, and gait analysis.  
-Results are transmitted wirelessly via **Bluetooth Low Energy (BLE)**.
+# **GaitMate - RTES Parkinson’s Detection Project**
 
----
+GaitMate is a real-time embedded system built on the **ST B-L475E-IOT01A (STM32L475)** Discovery board.  
+The device detects key Parkinson’s-related movement conditions using onboard IMU sensors and DSP analysis:
 
-## Features
-- IMU sampling at 52 Hz (accelerometer + gyroscope)
-- 3-second double-buffered data window
-- FFT-based frequency analysis for tremor/dyskinesia
-- Step and cadence analysis for FOG detection
-- BLE service with three characteristics:
-    - Tremor level
-    - Dyskinesia level
-    - FOG state
-- LED and button feedback for user interaction
+- **Tremor detection** (3–7 Hz bandpower)
+- **Dyskinesia detection** (0.5–3 Hz bandpower)
+- **Freezing of Gait (FOG)** using step-rate + variability analysis
+
+All computation runs **fully on-device** using a high-frequency IMU stream, a sliding window, FFT processing, gait features, and a BLE notification pipeline.  
+Process results are broadcast wirelessly using **Bluetooth Low Energy (BLE)**.
 
 ---
 
-## Requirements
-- ST B-L475E-IOT01A Discovery Kit
+## 🚀 Features
+
+- IMU sampling at **~104 Hz**
+- Real-time **1.5–2s sliding window** with continuous processing
+- **CMSIS-DSP FFT** for tremor & dyskinesia frequency band analysis
+- **Step detection** and cadence estimation
+- **Variability score** for movement irregularity
+- **FOG detection** triggered when cadence + variance meet threshold
+- BLE service streaming:
+  - Tremor level
+  - Dyskinesia level
+  - Steps per minute
+  - FOG state
+  - Variability score
+- LED/button support for debugging and demo interactions
+- Deterministic real-time execution with no missed deadlines
+
+---
+
+## 📡 BLE Interface
+
+GaitMate exposes a custom BLE service with automatic notifications.  
+Example message:
+
+You can read the data using:
+
+- **LightBlue (iOS / Android)**
+- **nRF Connect**
+- Any BLE scanner app
+
+---
+
+## Output Interpretation
+
+| Field      | Meaning |
+|-----------|----------|
+| **tremor** | Tremor severity (0–100) |
+| **dysk** | Dyskinesia severity (0–100) |
+| **steps** | Step rate (steps per minute) |
+| **fog** | 1 = freezing-of-gait, 0 = normal |
+| **var** | Movement variability (instability metric) |
+
+---
+
+## 🛠 Requirements
+
+- **ST B-L475E-IOT01A Discovery Kit**
 - PlatformIO (Mbed framework)
-- CLion IDE / VSCode (optional)
-- Mobile BLE scanner
+- CLion or VSCode (optional)
+- Mobile BLE scanner (LightBlue recommended)
 
 ---
 
-## Team
-**GaitWave Team — Fall 2025 NYU**
+## 🏗 Build & Upload
+
+```bash
+pio run
+pio run -t upload
+pio device monitor -b 115200
